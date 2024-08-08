@@ -389,7 +389,7 @@ class ApiSetting:
         self.http.mount("https://", adapter)
         self.http.mount("http://", adapter)
     
-    def get_data(self, api_string="", params=None):
+    def get_data(self, api_string="", with_json = True, params=None):
         while True:
             try:
                 self.count += 1
@@ -407,7 +407,10 @@ class ApiSetting:
                         wait_minutes, wait_seconds = divmod(remainder, 60)
                         print(f"Rate limit exceeded. Waiting for {int(wait_hours)} hours, {int(wait_minutes)} minutes, and {int(wait_seconds)} seconds until {reset_time_jst.strftime('%Y-%m-%d %H:%M:%S %Z%z')} (JST).")
                         time.sleep(wait_time + 1)  # 余裕を持って1秒追加
-                    return response.json()
+                    if with_json:
+                        return response.json()
+                    else:
+                        return response
                 elif response.status_code == 403:
                     print("Rate limit info:", response.headers.get('X-RateLimit-Limit'), remaining)
                     print("Error 403: Access Forbidden. You may have hit a rate limit or the token is invalid.")

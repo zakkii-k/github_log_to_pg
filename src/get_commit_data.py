@@ -1,9 +1,9 @@
 import json
-import requests
 import os
 import tqdm
 import time
 import argparse
+from Classes import ApiSetting
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Process some parameters.')
@@ -13,10 +13,8 @@ def parse_arguments():
     parser.add_argument('-d', '--out_dir', type=str, default=current_directory, help='The output directory')
     return parser.parse_args()
 
-def get_total_pages(api_url, headers, per_page=100):
-    response = requests.get(api_url, headers=headers, params={'per_page': per_page})
-
-    response.raise_for_status()
+def get_total_pages(api_setting, per_page=100):
+    response = api_setting.get_data("commits", with_json=False, params={'per_page': per_page})
 
     link_header = response.headers.get('Link', None)
     if link_header:
@@ -29,12 +27,12 @@ def get_total_pages(api_url, headers, per_page=100):
                 return int(last_page_number)
     return 1 # if there is only one page
 
-def get_commits(api_url, headers):
-    total_pages = get_total_pages(api_url, headers)
+def get_commits(api_setting):
+    total_pages = get_total_pages(api_setting)
     print(f"Total pages: {total_pages}")
     commits = []
     for page in tqdm.tqdm(range(1, total_pages+1)):
-        response = requests.get(f"{api_url}?page={page}", headers=headers)
+        response = api_setting.get_data("commits?page=" + str(page), with_json=False)
         if response.status_code == 200:
             commits.extend(response.json())
         else:
@@ -49,10 +47,10 @@ def write_as_json(data, file_name):
         json.dump(data, file, indent=4)
 
 
-def get_commit(api_url, headers, sha_list):
+def get_commit(api_setting, sha_list):
     commits = {}
     for sha in tqdm.tqdm(sha_list):
-        response = requests.get(api_url + sha, headers=headers)
+        response = api_setting.get_data("commits/" + sha, with_json=False)
         if response.status_code == 200:
             commits[sha] = response.json()
         else:
@@ -60,20 +58,18 @@ def get_commit(api_url, headers, sha_list):
         time.sleep(0.5)
     return commits
 
-def main(owner_name, repo_name, out_dir):
-    base_url = f"https://api.github.com/repos/{owner_name}/{repo_name}/"
-    token = os.getenv('GITHUB_TOKEN')
-    headers = {"Authorization": f"token {token}"}
-    commits = get_commits(base_url + "commits", headers)
+def main(api_setting, out_dir):
+    commits = get_commits(api_setting)
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
     write_as_json(commits, os.path.join(out_dir, 'commits.json'))
     sha_list = [commit['sha'] for commit in commits]
-    commit_details = get_commit(base_url + "commits/", headers, sha_list)
+    commit_details = get_commit(api_setting, sha_list)
     write_as_json(commit_details, os.path.join(out_dir, 'commit_details.json'))
 
 
 
 if __name__ == '__main__':
     args = parse_arguments()
-    main(args.owner_name, args.repo_name, args.out_dir)
+    api_setting = ApiSetting(args.owner_name, args.repo_name)
+    main(api_setting, args.out_dir)
